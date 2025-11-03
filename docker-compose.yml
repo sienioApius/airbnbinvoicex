@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+    platform: linux/amd64
+    ports:
+      - "5001:5001"
+    volumes:
+      # Mount invoice_downloads to persist downloaded invoices
+      - ./invoice_downloads:/app/invoice_downloads
+      # Mount session_cookies to persist login sessions
+      - ./session_cookies.json:/app/session_cookies.json
+    environment:
+      - FLASK_APP=app.py
+      - FLASK_RUN_HOST=0.0.0.0
+      - FLASK_RUN_PORT=5001
+      # Add SECRET_KEY if you have one, otherwise app will generate one
+      # - SECRET_KEY=your_secret_key_here
+    restart: unless-stopped
+    shm_size: '2gb'  # Increase shared memory for Chrome
