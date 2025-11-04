@@ -144,6 +144,11 @@ def initialize_driver(download_dir, headless=True):
     }
     chrome_options.add_experimental_option("prefs", prefs)
 
+    # Use chromium if chrome is not available (for arm64 builds)
+    chrome_binary = shutil.which("google-chrome") or shutil.which("chromium") or shutil.which("chromium-browser")
+    if chrome_binary:
+        chrome_options.binary_location = chrome_binary
+    
     driver = webdriver.Chrome(options=chrome_options)
     
     # Track the driver for cleanup
@@ -521,8 +526,12 @@ def scrape_airbnb_invoices(booking_numbers, manual_mfa=False, client_id=None):
                     PROGRESS[client_id]['stage_progress'] = 20 + download_progress
 
     except Exception as e:
-        logging.info(f"Error during invoice scraping: {e}")
-        failed_downloads.extend(booking_numbers[index:])
+        logging.exception(f"Error during invoice scraping: {e}")
+        # If index is not defined (error before loop), mark all as failed
+        if 'index' in locals():
+            failed_downloads.extend(booking_numbers[index:])
+        else:
+            failed_downloads.extend(booking_numbers)
     finally:
         try:
             if driver_headless is not None:
