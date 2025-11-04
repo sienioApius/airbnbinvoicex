@@ -1,5 +1,4 @@
-# syntax=docker/dockerfile:1
-FROM --platform=linux/amd64 python:3.10-slim
+FROM python:3.10-slim
 
 # Install system dependencies for Chrome and Selenium
 RUN apt-get update && apt-get install -y \
@@ -8,46 +7,34 @@ RUN apt-get update && apt-get install -y \
     unzip \
     curl \
     ca-certificates \
-    dpkg \
     fonts-liberation \
     libasound2 \
     libatk-bridge2.0-0 \
     libatk1.0-0 \
     libatspi2.0-0 \
-    libc6 \
-    libcairo2 \
     libcups2 \
-    libcurl4 \
     libdbus-1-3 \
     libdrm2 \
-    libexpat1 \
     libgbm1 \
-    libglib2.0-0 \
     libgtk-3-0 \
     libnspr4 \
     libnss3 \
-    libpango-1.0-0 \
-    libudev1 \
-    libvulkan1 \
     libwayland-client0 \
-    libx11-6 \
-    libxcb1 \
     libxcomposite1 \
     libxdamage1 \
-    libxext6 \
     libxfixes3 \
     libxkbcommon0 \
     libxrandr2 \
     xdg-utils \
     libu2f-udev \
+    libvulkan1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Google Chrome by downloading .deb directly
-RUN wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb -O /tmp/chrome.deb \
+# Install Google Chrome
+RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome-keyring.gpg \
+    && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome-keyring.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
     && apt-get update \
-    && apt-get install -y /tmp/chrome.deb \
-    || (apt-get install -f -y && apt-get install -y /tmp/chrome.deb) \
-    && rm -f /tmp/chrome.deb \
+    && apt-get install -y google-chrome-stable \
     && rm -rf /var/lib/apt/lists/*
 
 # Install ChromeDriver (Selenium 4+ can auto-manage ChromeDriver, but we install it manually for reliability)

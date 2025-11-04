@@ -18,6 +18,9 @@ import os
 import shutil
 import base64
 import json
+import signal
+import atexit
+import sys
 
 import logging
 from selenium.webdriver.remote.remote_connection import LOGGER as selenium_logger
@@ -40,6 +43,66 @@ app.secret_key = SECRET_KEY
 PROGRESS = {}
 PROGRESS_LOCK = Lock()
 
+# Track active resources for cleanup
+ACTIVE_THREADS = []
+ACTIVE_DRIVERS = []
+ACTIVE_TIMERS = []
+SHUTDOWN_REQUESTED = False
+CLEANUP_LOCK = Lock()
+
+
+
+def cleanup_all_resources():
+    """Clean up all active resources (drivers, threads, timers)"""
+    global SHUTDOWN_REQUESTED
+    SHUTDOWN_REQUESTED = True
+    
+    logging.info("Starting graceful shutdown...")
+    
+    with CLEANUP_LOCK:
+        # Cancel all active timers
+        for timer in ACTIVE_TIMERS:
+            try:
+                timer.cancel()
+            except Exception as e:
+                logging.warning(f"Error canceling timer: {e}")
+        ACTIVE_TIMERS.clear()
+        
+        # Close all active WebDriver instances
+        for driver in ACTIVE_DRIVERS:
+            try:
+                if driver is not None:
+                    driver.quit()
+            except Exception as e:
+                logging.warning(f"Error closing driver: {e}")
+        ACTIVE_DRIVERS.clear()
+        
+        # Wait for threads to finish (with timeout)
+        for thread in ACTIVE_THREADS:
+            if thread.is_alive():
+                try:
+                    thread.join(timeout=5.0)  # Wait up to 5 seconds per thread
+                    if thread.is_alive():
+                        logging.warning(f"Thread {thread.name} did not finish in time")
+                except Exception as e:
+                    logging.warning(f"Error joining thread: {e}")
+        ACTIVE_THREADS.clear()
+    
+    logging.info("Graceful shutdown completed.")
+
+
+def signal_handler(signum, frame):
+    """Handle shutdown signals"""
+    logging.info(f"Received signal {signum}, initiating shutdown...")
+    cleanup_all_resources()
+    sys.exit(0)
+
+
+def register_shutdown_handlers():
+    """Register signal handlers and atexit handlers for graceful shutdown"""
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
+    atexit.register(cleanup_all_resources)
 
 
 def initialize_driver(download_dir, headless=True):
@@ -82,6 +145,10 @@ def initialize_driver(download_dir, headless=True):
     chrome_options.add_experimental_option("prefs", prefs)
 
     driver = webdriver.Chrome(options=chrome_options)
+    
+    # Track the driver for cleanup
+    with CLEANUP_LOCK:
+        ACTIVE_DRIVERS.append(driver)
     
     # Set timeouts for faster failure detection
     driver.set_page_load_timeout(30)
@@ -360,7 +427,13 @@ def scrape_airbnb_invoices(booking_numbers, manual_mfa=False, client_id=None):
         
         if not session_loaded:
             # Need MFA - close headless and open visible browser
-            driver_headless.quit()
+            try:
+                with CLEANUP_LOCK:
+                    if driver_headless in ACTIVE_DRIVERS:
+                        ACTIVE_DRIVERS.remove(driver_headless)
+                driver_headless.quit()
+            except Exception as e:
+                logging.warning(f"Error closing headless driver during MFA: {e}")
             driver_headless = None
             
             # Update progress to show MFA needed
@@ -395,7 +468,13 @@ def scrape_airbnb_invoices(booking_numbers, manual_mfa=False, client_id=None):
                     logging.info(f"Cookie add failed for {sanitized.get('name')}: {e}")
             
             # Close visible browser now that headless session is authenticated
-            driver_visible.quit()
+            try:
+                with CLEANUP_LOCK:
+                    if driver_visible in ACTIVE_DRIVERS:
+                        ACTIVE_DRIVERS.remove(driver_visible)
+                driver_visible.quit()
+            except Exception as e:
+                logging.warning(f"Error closing visible driver after MFA: {e}")
             driver_visible = None
 
         # Update progress to show we're ready to download
@@ -410,6 +489,11 @@ def scrape_airbnb_invoices(booking_numbers, manual_mfa=False, client_id=None):
         all_downloaded_files = []
 
         for index, booking_number in enumerate(booking_numbers, start=1):
+            # Check for shutdown request
+            if SHUTDOWN_REQUESTED:
+                logging.info(f"Shutdown requested, stopping at booking {index} of {total_bookings}")
+                break
+            
             logging.info(f"Downloading invoices for booking {booking_number} ({index} of {total_bookings})")
 
             success, file_paths = download_invoice(driver_headless, booking_number, download_dir)
@@ -442,10 +526,21 @@ def scrape_airbnb_invoices(booking_numbers, manual_mfa=False, client_id=None):
     finally:
         try:
             if driver_headless is not None:
+                with CLEANUP_LOCK:
+                    if driver_headless in ACTIVE_DRIVERS:
+                        ACTIVE_DRIVERS.remove(driver_headless)
                 driver_headless.quit()
+        except Exception as e:
+            logging.warning(f"Error closing headless driver: {e}")
         finally:
             if driver_visible is not None:
-                driver_visible.quit()
+                try:
+                    with CLEANUP_LOCK:
+                        if driver_visible in ACTIVE_DRIVERS:
+                            ACTIVE_DRIVERS.remove(driver_visible)
+                    driver_visible.quit()
+                except Exception as e:
+                    logging.warning(f"Error closing visible driver: {e}")
 
     # zip the downloaded invoices here using zip_invoices function
     zip_path = zip_invoices(all_downloaded_files, download_dir)
@@ -474,12 +569,33 @@ def scrape_airbnb_invoices(booking_numbers, manual_mfa=False, client_id=None):
 def background_scrape(client_id, booking_numbers):
     """Run scraping in background thread"""
     try:
+        # Check for shutdown request
+        if SHUTDOWN_REQUESTED:
+            logging.info("Shutdown requested, skipping background scrape")
+            return
         # Capture the returned values from scrape_airbnb_invoices function
         all_downloaded_files, download_dir, failed_downloads, zip_path = scrape_airbnb_invoices(booking_numbers, manual_mfa=True, client_id=client_id)
 
         # Trigger cleanup with a delay
         cleanup_delay = 30  # seconds, adjust as needed
-        Timer(cleanup_delay, cleanup_files, args=[all_downloaded_files, download_dir]).start()
+        
+        # Use a list to hold timer reference for closure
+        timer_ref = [None]
+        
+        def cleanup_with_removal():
+            try:
+                cleanup_files(all_downloaded_files, download_dir)
+            finally:
+                # Remove timer from active list when done
+                with CLEANUP_LOCK:
+                    if timer_ref[0] and timer_ref[0] in ACTIVE_TIMERS:
+                        ACTIVE_TIMERS.remove(timer_ref[0])
+        
+        timer = Timer(cleanup_delay, cleanup_with_removal)
+        timer_ref[0] = timer
+        with CLEANUP_LOCK:
+            ACTIVE_TIMERS.append(timer)
+        timer.start()
         # Create a summary report
         report = {
             'total_bookings': len(booking_numbers),
@@ -524,6 +640,8 @@ def index():
         # Start background scraping
         thread = Thread(target=background_scrape, args=(client_id, booking_numbers))
         thread.daemon = True
+        with CLEANUP_LOCK:
+            ACTIVE_THREADS.append(thread)
         thread.start()
 
         return render_template('progress.html', client_id=client_id)
@@ -576,3 +694,7 @@ def complete():
 @app.errorhandler(404)
 def not_found(error):
     return render_template('404.html'), 404
+
+
+# Register shutdown handlers when the module is imported
+register_shutdown_handlers()
