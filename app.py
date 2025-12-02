@@ -5,6 +5,7 @@ from flask import Flask, render_template, request, send_file, session, redirect,
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
@@ -280,110 +281,178 @@ def download_invoice(driver, booking_number, download_dir):
 
     try:
         booking_url = f"https://www.airbnb.com/hosting/reservations/all?confirmationCode={booking_number}"
+        logging.info(f"Navigating to: {booking_url}")
         driver.get(booking_url)
 
-        # Reduced wait time for page load (still safe, just faster)
+        # Wait for page load
         WebDriverWait(driver, 20).until(lambda d: d.execute_script('return document.readyState') == 'complete')
-
-        # Reduced wait time for invoice links
-        WebDriverWait(driver, 20).until(
-            EC.presence_of_all_elements_located((By.XPATH, "//a[contains(@href, '/vat_invoices/')]"))
-        )
-
-        # Optimized lazy loading trigger - faster scrolling
+        
+        current_url = driver.current_url
+        
+        # First, check if invoice links are already visible on current page
+        quick_check_links = []
         try:
-            driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-            time.sleep(0.5)  # Reduced from 1 second
-            driver.execute_script("window.scrollTo(0, 0);")
-            time.sleep(0.5)  # Reduced from 1 second
+            quick_check_links = driver.find_elements(By.XPATH, "//a[contains(@href, '/vat_invoices/') or contains(@href, '/invoice/')]")
+            if quick_check_links:
+                logging.info(f"Invoice links already visible ({len(quick_check_links)} found), skipping navigation")
         except Exception:
             pass
+        
+        # Try to navigate to reservation details only if links not found and we're on a list page
+        if not quick_check_links and ('/reservations/all' in current_url or 'confirmationCode' in current_url):
+            # Find reservation link and navigate directly
+            try:
+                reservation_link = driver.find_element(By.XPATH, f"//a[contains(@href, '{booking_number}')]")
+                href = reservation_link.get_attribute('href')
+                if href and '/reservations/details/' in href:
+                    driver.get(href)
+                    # Wait for page load with shorter timeout
+                    WebDriverWait(driver, 10).until(
+                        lambda d: d.execute_script('return document.readyState') == 'complete'
+                    )
+                    current_url = driver.current_url
+                else:
+                    logging.warning("Could not find valid reservation details URL")
+            except Exception as e:
+                logging.warning(f"Error navigating to reservation details: {e}")
 
-        # Re-evaluate links after potential lazy load
-        download_links = driver.find_elements(By.XPATH, "//a[contains(@href, '/vat_invoices/')]")
-        logging.info(f"Found {len(download_links)} invoice link(s) for booking {booking_number}")
+        # Quick scroll to trigger lazy loading (only if we navigated)
+        if not quick_check_links:
+            try:
+                driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                time.sleep(0.3)
+                driver.execute_script("window.scrollTo(0, 0);")
+            except Exception:
+                pass
 
+        # Use quick_check_links if we found them earlier, otherwise search
+        if quick_check_links:
+            download_links = quick_check_links
+            logging.info(f"Using {len(download_links)} invoice link(s) found earlier")
+        else:
+            # Try selectors in order of likelihood
+            invoice_selectors = [
+                "//a[contains(@href, '/vat_invoices/')]",
+                "//a[contains(@href, '/invoice/')]",
+            ]
+            
+            download_links = []
+            for selector in invoice_selectors:
+                try:
+                    links = driver.find_elements(By.XPATH, selector)
+                    if links:
+                        download_links = links
+                        logging.info(f"Found {len(download_links)} invoice link(s)")
+                        break
+                except Exception:
+                    continue
+        
         if not download_links:
-            logging.info(f"No invoice links found for booking number {booking_number}")
+            logging.warning(f"No invoice links found for booking number {booking_number}")
             return True, downloaded_file_paths
 
         for link_index in range(len(download_links)):
-            link_xpath = f"(//a[contains(@href, '/vat_invoices/')])[{link_index+1}]"
-            WebDriverWait(driver, 20).until(  # Reduced from 40 seconds
-                EC.element_to_be_clickable((By.XPATH, link_xpath))
-            )
-            link_el = driver.find_element(By.XPATH, link_xpath)
-            
-            # Optimized scrolling and clicking
             try:
-                driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", link_el)
-                time.sleep(0.2)  # Minimal delay for scroll
-            except Exception:
-                pass
-            
-            try:
+                link_el = download_links[link_index]
+                
+                # Wait for link to be clickable
+                WebDriverWait(driver, 20).until(EC.element_to_be_clickable(link_el))
+                
+                # Click invoice link
+                try:
+                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", link_el)
+                    time.sleep(0.1)
+                except Exception:
+                    pass
+                
                 driver.execute_script("arguments[0].click();", link_el)
-            except Exception:
-                link_el.click()
 
-            # Reduced wait for new tab
-            WebDriverWait(driver, 10).until(lambda d: len(d.window_handles) > 1)  # Reduced from 20
-            driver.switch_to.window(driver.window_handles[-1])
+                # Wait for new tab (shorter timeout)
+                WebDriverWait(driver, 5).until(lambda d: len(d.window_handles) > 1)
+                driver.switch_to.window(driver.window_handles[-1])
 
-            # Reduced wait for page load
-            WebDriverWait(driver, 10).until(lambda d: d.execute_script('return document.readyState') == 'complete')  # Reduced from 20
+                # Wait for page load (shorter timeout)
+                WebDriverWait(driver, 5).until(lambda d: d.execute_script('return document.readyState') == 'complete')
 
-            # Optimized print options for faster PDF generation
-            print_options = {
-                "printBackground": False,  # Disabled for faster rendering
-                "pageRanges": "1",
-                "paperWidth": 8.27,
-                "paperHeight": 11.69,
-                "marginTop": 0,
-                "marginBottom": 0,
-                "marginLeft": 0,
-                "marginRight": 0,
-                "preferCSSPageSize": False,  # Disabled for faster processing
-                "displayHeaderFooter": False,  # Disabled for faster processing
-                "scale": 0.8  # Smaller scale for faster processing
-            }
+                # Optimized print options for faster PDF generation
+                print_options = {
+                    "printBackground": False,
+                    "pageRanges": "1",
+                    "paperWidth": 8.27,
+                    "paperHeight": 11.69,
+                    "marginTop": 0,
+                    "marginBottom": 0,
+                    "marginLeft": 0,
+                    "marginRight": 0,
+                    "preferCSSPageSize": False,
+                    "displayHeaderFooter": False,
+                    "scale": 0.8
+                }
 
-            # Execute the print command
-            pdf = driver.execute_cdp_cmd("Page.printToPDF", print_options)
+                # Execute the print command
+                pdf = driver.execute_cdp_cmd("Page.printToPDF", print_options)
 
-            # Decode the result
-            pdf_content = base64.b64decode(pdf['data'])
+                # Decode the result
+                pdf_content = base64.b64decode(pdf['data'])
 
-            # Save the PDF to a file
-            file_path = os.path.join(download_dir, f"invoice_{booking_number}_{link_index+1}.pdf")
-            with open(file_path, 'wb') as file:
-                file.write(pdf_content)
-            downloaded_file_paths.append(file_path)
+                # Save the PDF to a file
+                file_path = os.path.join(download_dir, f"invoice_{booking_number}_{link_index+1}.pdf")
+                with open(file_path, 'wb') as file:
+                    file.write(pdf_content)
+                downloaded_file_paths.append(file_path)
+                logging.info(f"Saved invoice PDF: {file_path}")
 
-            # Close the new tab and switch back to the original tab
-            driver.close()
-            driver.switch_to.window(driver.window_handles[0])
+                # Close the new tab and switch back
+                driver.close()
+                driver.switch_to.window(driver.window_handles[0])
+                time.sleep(0.5)  # Minimal delay between downloads
+                
+            except Exception as link_error:
+                logging.error(f"Error processing invoice link {link_index + 1}: {link_error}")
+                # Try to close any extra tabs and continue
+                try:
+                    while len(driver.window_handles) > 1:
+                        driver.switch_to.window(driver.window_handles[-1])
+                        driver.close()
+                    driver.switch_to.window(driver.window_handles[0])
+                except Exception:
+                    pass
+                continue
 
-            # Reduced delay between downloads (still respectful to Airbnb)
-            time.sleep(1)  # Reduced from 2 seconds
-            # Reduced wait for window handles
-            WebDriverWait(driver, 5).until(lambda d: len(d.window_handles) >= 1)  # Reduced from 20
-
-        logging.info(f"Successfully downloaded invoices for booking {booking_number}")
+        logging.info(f"Successfully downloaded {len(downloaded_file_paths)} invoice(s) for booking {booking_number}")
         return True, downloaded_file_paths
     
     except Exception as e:
-        # Capture more context and a screenshot to aid debugging
+        # Enhanced error handling with more diagnostics
+        timestamp = int(time.time())
+        screenshot_path = None
+        html_path = None
+        
         try:
-            timestamp = int(time.time())
             screenshot_path = os.path.join(download_dir, f"error_{booking_number}_{timestamp}.png")
             driver.save_screenshot(screenshot_path)
-        except Exception:
+            logging.info(f"Saved error screenshot: {screenshot_path}")
+        except Exception as screenshot_error:
             screenshot_path = "<screenshot failed>"
+            logging.warning(f"Could not save screenshot: {screenshot_error}")
+        
+        try:
+            # Save HTML for debugging
+            html_path = os.path.join(download_dir, f"error_{booking_number}_{timestamp}.html")
+            with open(html_path, 'w', encoding='utf-8') as f:
+                f.write(driver.page_source)
+            logging.info(f"Saved error HTML: {html_path}")
+        except Exception as html_error:
+            html_path = "<html save failed>"
+            logging.warning(f"Could not save HTML: {html_error}")
+        
+        current_url = getattr(driver, 'current_url', 'n/a')
+        page_title = getattr(driver, 'title', 'n/a')
+        
         logging.exception(
             f"Error downloading invoice for booking number {booking_number}: {repr(e)} | "
-            f"url={getattr(driver, 'current_url', 'n/a')} | title={getattr(driver, 'title', 'n/a')} | "
-            f"screenshot={screenshot_path}"
+            f"url={current_url} | title={page_title} | "
+            f"screenshot={screenshot_path} | html={html_path}"
         )
         return False, downloaded_file_paths
     
