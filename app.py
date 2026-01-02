@@ -373,6 +373,12 @@ def download_invoice(driver, booking_number, download_dir):
 
                 # Wait for page load (shorter timeout)
                 WebDriverWait(driver, 5).until(lambda d: d.execute_script('return document.readyState') == 'complete')
+                
+                # Wait for content to be rendered (content loads asynchronously after readyState)
+                # Check that body has substantial content (not just loading skeleton)
+                WebDriverWait(driver, 10).until(
+                    lambda d: len(d.find_element(By.TAG_NAME, "body").text) > 100 if d.find_elements(By.TAG_NAME, "body") else False
+                )
 
                 # Optimized print options for faster PDF generation
                 print_options = {
