@@ -6,68 +6,47 @@
     <title>AirbnbInvoiceX</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
         :root {
-            --bg:       #0C0B09;
-            --surface:  #141310;
-            --border:   rgba(255,255,255,0.07);
-            --coral:    #FF5A5F;
-            --coral-dim:#c94347;
-            --gold:     #D4956A;
-            --text:     #EDE8E0;
-            --muted:    rgba(237,232,224,0.45);
-            --radius:   4px;
+            --bg:      #111110;
+            --surface: #1A1A18;
+            --border:  rgba(255,255,255,0.09);
+            --coral:   #FF5A5F;
+            --text:    #F0EBE3;
+            --muted:   rgba(240,235,227,0.5);
         }
 
         html, body {
             height: 100%;
             background: var(--bg);
             color: var(--text);
-            font-family: 'DM Sans', sans-serif;
-            font-weight: 300;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 400;
             -webkit-font-smoothing: antialiased;
         }
 
-        /* grain overlay */
-        body::before {
-            content: '';
-            position: fixed;
-            inset: 0;
-            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
-            background-size: 200px 200px;
-            pointer-events: none;
-            z-index: 0;
-            opacity: 0.6;
-        }
-
-        /* quit button */
         .quit-btn {
             position: fixed;
             top: 20px;
             right: 24px;
             z-index: 100;
-            background: transparent;
-            border: 1px solid var(--border);
-            color: var(--muted);
-            font-family: 'DM Sans', sans-serif;
-            font-size: 11px;
-            font-weight: 400;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            padding: 6px 14px;
-            border-radius: 2px;
+            background: rgba(255,90,95,0.1);
+            border: 1px solid rgba(255,90,95,0.35);
+            color: #FF5A5F;
+            font-family: 'Outfit', sans-serif;
+            font-size: 14px;
+            font-weight: 500;
+            padding: 9px 20px;
+            border-radius: 6px;
             cursor: pointer;
-            transition: color 0.2s, border-color 0.2s;
+            transition: background 0.2s, border-color 0.2s;
         }
-        .quit-btn:hover { color: var(--coral); border-color: var(--coral); }
+        .quit-btn:hover { background: rgba(255,90,95,0.18); border-color: rgba(255,90,95,0.6); }
 
-        /* layout */
         .page {
-            position: relative;
-            z-index: 1;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
@@ -76,123 +55,104 @@
             padding: 60px 24px;
         }
 
-        /* wordmark */
-        .wordmark {
-            font-family: 'Cormorant Garamond', serif;
-            font-size: 13px;
+        .logo {
+            font-size: 15px;
             font-weight: 400;
-            letter-spacing: 0.25em;
-            text-transform: uppercase;
             color: var(--muted);
-            margin-bottom: 12px;
-            animation: fadeUp 0.6s ease both;
+            letter-spacing: 0.04em;
+            margin-bottom: 16px;
         }
 
-        .headline {
-            font-family: 'Cormorant Garamond', serif;
-            font-size: clamp(2.4rem, 5vw, 3.6rem);
+        h1 {
+            font-size: clamp(2rem, 5vw, 2.8rem);
             font-weight: 600;
-            line-height: 1.05;
             color: var(--text);
             text-align: center;
             margin-bottom: 8px;
-            animation: fadeUp 0.6s 0.08s ease both;
+            line-height: 1.15;
         }
 
-        .headline em {
-            font-style: italic;
-            color: var(--coral);
-        }
-
-        .subline {
-            font-size: 13px;
-            font-weight: 300;
+        .sub {
+            font-size: 17px;
             color: var(--muted);
-            letter-spacing: 0.02em;
+            font-weight: 300;
             text-align: center;
             margin-bottom: 48px;
-            animation: fadeUp 0.6s 0.14s ease both;
         }
 
-        /* card */
         .card {
             width: 100%;
-            max-width: 520px;
+            max-width: 540px;
             background: var(--surface);
             border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 40px;
-            animation: fadeUp 0.6s 0.2s ease both;
+            border-radius: 12px;
+            padding: 36px;
         }
 
-        .field-label {
+        label {
             display: block;
-            font-size: 11px;
+            font-size: 14px;
             font-weight: 500;
-            letter-spacing: 0.12em;
-            text-transform: uppercase;
             color: var(--muted);
             margin-bottom: 10px;
         }
 
         textarea {
             width: 100%;
-            background: rgba(255,255,255,0.03);
+            background: rgba(255,255,255,0.04);
             border: 1px solid var(--border);
-            border-radius: var(--radius);
+            border-radius: 8px;
             color: var(--text);
-            font-family: 'DM Sans', sans-serif;
-            font-size: 14px;
+            font-family: 'Outfit', sans-serif;
+            font-size: 16px;
             font-weight: 300;
-            line-height: 1.7;
+            line-height: 1.6;
             padding: 14px 16px;
             resize: vertical;
             min-height: 110px;
             outline: none;
             transition: border-color 0.2s;
         }
-        textarea::placeholder { color: rgba(237,232,224,0.2); }
-        textarea:focus { border-color: rgba(255,90,95,0.4); }
+        textarea::placeholder { color: rgba(240,235,227,0.2); }
+        textarea:focus { border-color: rgba(255,90,95,0.45); }
 
         .hint {
-            font-size: 11px;
+            font-size: 13px;
             color: var(--muted);
-            margin-top: 8px;
+            margin-top: 10px;
             line-height: 1.5;
         }
 
-        .btn-primary {
+        .btn {
             display: block;
             width: 100%;
             margin-top: 24px;
-            padding: 14px;
+            padding: 15px;
             background: var(--coral);
             border: none;
-            border-radius: var(--radius);
+            border-radius: 8px;
             color: #fff;
-            font-family: 'DM Sans', sans-serif;
-            font-size: 13px;
+            font-family: 'Outfit', sans-serif;
+            font-size: 16px;
             font-weight: 500;
-            letter-spacing: 0.06em;
-            text-transform: uppercase;
             cursor: pointer;
             transition: background 0.2s, transform 0.1s;
         }
-        .btn-primary:hover  { background: #ff6e72; }
-        .btn-primary:active { transform: scale(0.99); }
+        .btn:hover  { background: #ff6e72; }
+        .btn:active { transform: scale(0.99); }
 
-        /* progress overlay (shown after submit) */
+        /* progress state */
         #progress-container {
             display: none;
             flex-direction: column;
             align-items: center;
             text-align: center;
-            gap: 20px;
+            gap: 24px;
         }
 
         .ring {
-            width: 52px;
-            height: 52px;
+            width: 48px;
+            height: 48px;
             border: 2px solid rgba(255,90,95,0.15);
             border-top-color: var(--coral);
             border-radius: 50%;
@@ -201,54 +161,44 @@
 
         .progress-track {
             width: 100%;
-            max-width: 400px;
-            height: 2px;
+            max-width: 380px;
+            height: 3px;
             background: var(--border);
-            border-radius: 1px;
+            border-radius: 2px;
             overflow: hidden;
         }
         .progress-fill {
             height: 100%;
             width: 0%;
             background: var(--coral);
-            border-radius: 1px;
+            border-radius: 2px;
             transition: width 0.4s ease;
         }
 
         .progress-label {
-            font-size: 12px;
-            letter-spacing: 0.06em;
+            font-size: 15px;
             color: var(--muted);
         }
 
         .mfa-notice {
             display: none;
-            font-size: 13px;
-            color: var(--gold);
+            font-size: 15px;
+            color: #D4956A;
             background: rgba(212,149,106,0.08);
             border: 1px solid rgba(212,149,106,0.2);
-            border-radius: var(--radius);
-            padding: 12px 16px;
+            border-radius: 8px;
+            padding: 14px 20px;
             max-width: 400px;
             line-height: 1.6;
         }
 
-        /* footer */
         .footer {
-            margin-top: 40px;
-            font-size: 11px;
-            color: rgba(237,232,224,0.2);
-            letter-spacing: 0.04em;
-            animation: fadeUp 0.6s 0.3s ease both;
+            margin-top: 32px;
+            font-size: 13px;
+            color: rgba(240,235,227,0.25);
         }
 
-        @keyframes fadeUp {
-            from { opacity: 0; transform: translateY(12px); }
-            to   { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
+        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
     <script>
         function prepareData() {
@@ -258,19 +208,16 @@
         }
 
         window.onload = function() {
-            var textArea = document.getElementById('booking_numbers');
-            textArea.addEventListener('paste', function() {
+            document.getElementById('booking_numbers').addEventListener('paste', function() {
                 setTimeout(prepareData, 100);
             });
         };
 
         function onSubmitHandler(event) {
             event.preventDefault();
-
             document.getElementById('form-container').style.display = 'none';
             var p = document.getElementById('progress-container');
             p.style.display = 'flex';
-
             setTimeout(function() { event.target.submit(); }, 50);
             return false;
         }
@@ -283,21 +230,21 @@
     </form>
 
     <div class="page">
-        <div class="wordmark">AirbnbInvoiceX</div>
-        <h1 class="headline">Download your <em>invoices</em></h1>
-        <p class="subline">Paste booking codes — we handle the rest</p>
+        <div class="logo">AirbnbInvoiceX</div>
+        <h1>Download your invoices</h1>
+        <p class="sub">Paste booking codes — we handle the rest</p>
 
-        <div id="form-container" style="width:100%;max-width:520px;">
+        <div id="form-container" style="width:100%;max-width:540px;">
             <div class="card">
                 <form id="download-form" method="POST" onsubmit="return onSubmitHandler(event);">
-                    <label class="field-label" for="booking_numbers">Booking confirmation codes</label>
+                    <label for="booking_numbers">Booking confirmation codes</label>
                     <textarea
                         id="booking_numbers"
                         name="booking_numbers"
-                        placeholder="HMAB1234, XKQZ5678&#10;Paste one or many, comma or space separated"
+                        placeholder="HMAB1234, XKQZ5678&#10;Comma or space separated"
                     ></textarea>
                     <p class="hint">A browser window will open for Airbnb login &amp; MFA if needed.</p>
-                    <button type="submit" class="btn-primary">Download Invoices</button>
+                    <button type="submit" class="btn">Download Invoices</button>
                 </form>
             </div>
         </div>
@@ -305,13 +252,14 @@
         <div id="progress-container">
             <div class="ring"></div>
             <div>
-                <div style="font-family:'Cormorant Garamond',serif;font-size:1.5rem;margin-bottom:4px;">Preparing your invoices…</div>
-                <div style="font-size:13px;color:var(--muted);">Keep this window open</div>
+                <div style="font-size:1.6rem;font-weight:500;margin-bottom:6px;">Preparing your invoices…</div>
+                <div style="font-size:15px;color:var(--muted);">Keep this window open</div>
             </div>
             <div class="progress-track"><div class="progress-fill" id="progress-bar"></div></div>
             <div class="progress-label" id="progress-label">Initializing…</div>
             <div class="mfa-notice" id="mfa-hint">
-                A browser window opened for Airbnb login.<br>Complete MFA there — it will close automatically.
+                A browser window opened for Airbnb login.<br>
+                Complete MFA there — it will close automatically.
             </div>
         </div>
 

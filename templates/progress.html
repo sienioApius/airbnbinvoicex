@@ -6,38 +6,25 @@
     <title>AirbnbInvoiceX — Working…</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
         :root {
-            --bg:      #0C0B09;
-            --surface: #141310;
-            --border:  rgba(255,255,255,0.07);
+            --bg:      #111110;
+            --surface: #1A1A18;
+            --border:  rgba(255,255,255,0.09);
             --coral:   #FF5A5F;
-            --gold:    #D4956A;
-            --text:    #EDE8E0;
-            --muted:   rgba(237,232,224,0.45);
+            --text:    #F0EBE3;
+            --muted:   rgba(240,235,227,0.5);
         }
 
         html, body {
             height: 100%;
             background: var(--bg);
             color: var(--text);
-            font-family: 'DM Sans', sans-serif;
-            font-weight: 300;
+            font-family: 'Outfit', sans-serif;
             -webkit-font-smoothing: antialiased;
-        }
-
-        body::before {
-            content: '';
-            position: fixed;
-            inset: 0;
-            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
-            background-size: 200px 200px;
-            pointer-events: none;
-            z-index: 0;
-            opacity: 0.6;
         }
 
         .quit-btn {
@@ -45,24 +32,20 @@
             top: 20px;
             right: 24px;
             z-index: 100;
-            background: transparent;
-            border: 1px solid var(--border);
-            color: var(--muted);
-            font-family: 'DM Sans', sans-serif;
-            font-size: 11px;
-            font-weight: 400;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            padding: 6px 14px;
-            border-radius: 2px;
+            background: rgba(255,90,95,0.1);
+            border: 1px solid rgba(255,90,95,0.35);
+            color: #FF5A5F;
+            font-family: 'Outfit', sans-serif;
+            font-size: 14px;
+            font-weight: 500;
+            padding: 9px 20px;
+            border-radius: 6px;
             cursor: pointer;
-            transition: color 0.2s, border-color 0.2s;
+            transition: background 0.2s, border-color 0.2s;
         }
-        .quit-btn:hover { color: var(--coral); border-color: var(--coral); }
+        .quit-btn:hover { background: rgba(255,90,95,0.18); border-color: rgba(255,90,95,0.6); }
 
         .page {
-            position: relative;
-            z-index: 1;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
@@ -70,141 +53,74 @@
             justify-content: center;
             padding: 60px 24px;
             text-align: center;
-            gap: 32px;
+            gap: 28px;
         }
 
-        /* animated ring */
-        .ring-wrap {
-            position: relative;
-            width: 72px;
-            height: 72px;
-            animation: fadeIn 0.5s ease both;
-        }
-        .ring-outer {
-            position: absolute;
-            inset: 0;
-            border: 1.5px solid rgba(255,90,95,0.12);
-            border-radius: 50%;
-        }
-        .ring-inner {
-            position: absolute;
-            inset: 0;
-            border: 1.5px solid transparent;
+        .ring {
+            width: 52px;
+            height: 52px;
+            border: 2px solid rgba(255,90,95,0.15);
             border-top-color: var(--coral);
-            border-right-color: rgba(255,90,95,0.3);
             border-radius: 50%;
-            animation: spin 1.1s cubic-bezier(0.4,0,0.2,1) infinite;
-        }
-        .ring-dot {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 5px;
-            height: 5px;
-            background: var(--coral);
-            border-radius: 50%;
-            opacity: 0.6;
+            animation: spin 0.9s linear infinite;
         }
 
-        .content {
-            animation: fadeIn 0.5s 0.1s ease both;
-        }
-
-        .wordmark {
-            font-family: 'Cormorant Garamond', serif;
-            font-size: 11px;
-            font-weight: 400;
-            letter-spacing: 0.3em;
-            text-transform: uppercase;
-            color: var(--muted);
-            margin-bottom: 16px;
-        }
-
-        .headline {
-            font-family: 'Cormorant Garamond', serif;
-            font-size: clamp(1.8rem, 4vw, 2.6rem);
+        h1 {
+            font-size: clamp(1.8rem, 4vw, 2.4rem);
             font-weight: 600;
-            line-height: 1.1;
-            margin-bottom: 6px;
+            line-height: 1.2;
         }
 
-        .headline em { font-style: italic; color: var(--coral); }
-
-        .subline {
-            font-size: 13px;
+        .sub {
+            font-size: 17px;
             color: var(--muted);
+            font-weight: 300;
+            margin-top: -16px;
         }
 
-        /* progress */
         .progress-wrap {
             width: 100%;
-            max-width: 380px;
-            animation: fadeIn 0.5s 0.2s ease both;
+            max-width: 400px;
         }
-
         .progress-track {
-            height: 1px;
+            height: 3px;
             background: var(--border);
-            border-radius: 1px;
+            border-radius: 2px;
             overflow: hidden;
-            margin-bottom: 12px;
+            margin-bottom: 14px;
         }
         .progress-fill {
             height: 100%;
             width: 0%;
-            background: linear-gradient(90deg, var(--coral-dim, #c94347), var(--coral));
-            border-radius: 1px;
-            transition: width 0.5s cubic-bezier(0.4,0,0.2,1);
+            background: var(--coral);
+            border-radius: 2px;
+            transition: width 0.5s ease;
         }
-
         .progress-row {
             display: flex;
             justify-content: space-between;
-            align-items: center;
         }
+        .progress-label { font-size: 15px; color: var(--muted); }
+        .progress-pct   { font-size: 15px; color: var(--coral); font-weight: 500; }
 
-        .progress-label {
-            font-size: 12px;
-            letter-spacing: 0.04em;
-            color: var(--muted);
-        }
-
-        .progress-pct {
-            font-family: 'Cormorant Garamond', serif;
-            font-size: 13px;
-            color: var(--coral);
-        }
-
-        /* mfa */
         .mfa-card {
             display: none;
-            background: rgba(212,149,106,0.06);
-            border: 1px solid rgba(212,149,106,0.18);
-            border-radius: 4px;
+            background: rgba(212,149,106,0.08);
+            border: 1px solid rgba(212,149,106,0.2);
+            border-radius: 8px;
             padding: 16px 20px;
-            max-width: 380px;
+            max-width: 400px;
+            font-size: 15px;
+            color: #D4956A;
+            line-height: 1.6;
+        }
+
+        .footer {
             font-size: 13px;
-            color: var(--gold);
-            line-height: 1.65;
-            text-align: left;
-            animation: fadeIn 0.4s ease both;
-        }
-        .mfa-card strong {
-            display: block;
-            font-weight: 500;
-            margin-bottom: 4px;
-            letter-spacing: 0.02em;
+            color: rgba(240,235,227,0.25);
         }
 
-        .note {
-            font-size: 11px;
-            color: rgba(237,232,224,0.2);
-            letter-spacing: 0.04em;
-        }
-
-        @keyframes spin    { to { transform: rotate(360deg); } }
-        @keyframes fadeIn  { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
@@ -214,17 +130,9 @@
     </form>
 
     <div class="page">
-        <div class="ring-wrap">
-            <div class="ring-outer"></div>
-            <div class="ring-inner"></div>
-            <div class="ring-dot"></div>
-        </div>
-
-        <div class="content">
-            <div class="wordmark">AirbnbInvoiceX</div>
-            <h1 class="headline">Fetching your <em>invoices</em></h1>
-            <p class="subline">Don't close this tab</p>
-        </div>
+        <div class="ring"></div>
+        <h1>Fetching your invoices…</h1>
+        <p class="sub">Don't close this tab</p>
 
         <div class="progress-wrap">
             <div class="progress-track">
@@ -237,30 +145,26 @@
         </div>
 
         <div class="mfa-card" id="mfa-hint">
-            <strong>Action needed</strong>
             A browser window opened for Airbnb login.<br>
             Complete your MFA there — it will close automatically.
         </div>
 
-        <div class="note">Files saved to ~/Documents/AirbnbInvoiceX</div>
+        <div class="footer">Files saved to ~/Documents/AirbnbInvoiceX</div>
     </div>
 
     <script>
         async function pollProgress() {
             try {
-                const res = await fetch('/progress');
+                const res  = await fetch('/progress');
                 const data = await res.json();
                 const bar   = document.getElementById('progress-bar');
                 const label = document.getElementById('progress-label');
                 const pctEl = document.getElementById('progress-pct');
                 if (!data || !bar) return;
 
-                const total         = data.total || 0;
-                const current       = data.current || 0;
-                const done          = !!data.done;
-                const status        = data.status || 'unknown';
-                const stageProgress = data.stage_progress || 0;
-                const pct           = Math.floor(stageProgress);
+                const pct    = Math.floor(data.stage_progress || 0);
+                const status = data.status || 'unknown';
+                const done   = !!data.done;
 
                 bar.style.width = pct + '%';
                 if (pctEl) pctEl.textContent = pct + '%';
@@ -269,7 +173,7 @@
                     label.textContent = 'Waiting for login…';
                     document.getElementById('mfa-hint').style.display = 'block';
                 } else if (status === 'downloading') {
-                    label.textContent = `Booking ${current} of ${total}`;
+                    label.textContent = `Booking ${data.current} of ${data.total}`;
                 } else if (status === 'started') {
                     label.textContent = 'Checking session…';
                 } else if (done) {
@@ -278,28 +182,18 @@
                     label.textContent = 'Initializing…';
                 }
 
-                if (!done) {
-                    setTimeout(pollProgress, 750);
-                } else {
-                    checkComplete();
-                }
-            } catch (e) {
-                setTimeout(pollProgress, 2000);
-            }
+                if (!done) { setTimeout(pollProgress, 750); }
+                else        { checkComplete(); }
+            } catch (e) { setTimeout(pollProgress, 2000); }
         }
 
         async function checkComplete() {
             try {
                 const res  = await fetch('/complete_check');
                 const data = await res.json();
-                if (data.done && data.redirect) {
-                    window.location.href = data.redirect;
-                } else if (data.done) {
-                    setTimeout(checkComplete, 750);
-                }
-            } catch (e) {
-                setTimeout(checkComplete, 2000);
-            }
+                if (data.done && data.redirect) { window.location.href = data.redirect; }
+                else if (data.done)              { setTimeout(checkComplete, 750); }
+            } catch (e) { setTimeout(checkComplete, 2000); }
         }
 
         setTimeout(pollProgress, 1000);
