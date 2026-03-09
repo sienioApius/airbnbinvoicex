@@ -23,6 +23,12 @@ import signal
 import atexit
 import sys
 
+def get_user_data_dir():
+    """Return ~/Documents/AirbnbInvoiceX, creating it if needed."""
+    path = os.path.join(os.path.expanduser("~"), "Documents", "AirbnbInvoiceX")
+    os.makedirs(path, exist_ok=True)
+    return path
+
 import logging
 from selenium.webdriver.remote.remote_connection import LOGGER as selenium_logger
 
@@ -444,9 +450,8 @@ def zip_invoices(invoice_paths, download_dir):
 
 
 def scrape_airbnb_invoices(booking_numbers, manual_mfa=False, client_id=None):
-    download_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'invoice_downloads')
-    if not os.path.exists(download_dir):
-        os.makedirs(download_dir)
+    download_dir = os.path.join(get_user_data_dir(), 'invoice_downloads')
+    os.makedirs(download_dir, exist_ok=True)
 
     total_bookings = len(booking_numbers)
     failed_downloads = []
@@ -455,7 +460,7 @@ def scrape_airbnb_invoices(booking_numbers, manual_mfa=False, client_id=None):
 
     driver_visible = None
     driver_headless = None
-    cookie_file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'session_cookies.json')
+    cookie_file_path = os.path.join(get_user_data_dir(), 'session_cookies.json')
 
     try:
         # Initialize progress with stages
@@ -726,7 +731,7 @@ def complete_check():
 
 @app.route('/download_zip/<filename>')
 def download_zip(filename):
-    safe_base = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'invoice_downloads')
+    safe_base = os.path.join(get_user_data_dir(), 'invoice_downloads')
     full_path = os.path.realpath(os.path.join(safe_base, filename))
     if not full_path.startswith(safe_base + os.sep):
         abort(400)
