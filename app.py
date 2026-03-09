@@ -269,17 +269,21 @@ def find_reservation_row(driver, booking_number):
 
 
 def open_more_options_menu(driver, row):
-    """Click the 'More options' button in a reservation row. Returns True if menu opened."""
+    """Click the 'More options' button via JS (bypasses overlays). Returns True if menu opened."""
     try:
-        # Find the three-dots button in this row (works for both PL and EN)
         more_btn = row.find_element(
             By.XPATH, ".//button[@aria-label='Więcej opcji' or @aria-label='More options']"
         )
         driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", more_btn)
-        more_btn.click()
-        # Wait for popup to actually appear
+        # JS click bypasses element-not-interactable and click-intercepted errors
+        driver.execute_script("arguments[0].click();", more_btn)
+        # Wait for the popup menu to appear (any menu link is fine)
         WebDriverWait(driver, 5).until(
-            EC.presence_of_element_located((By.XPATH, "//a[contains(@href, '/invoice/')] | //a[contains(text(), 'Faktura') or contains(text(), 'Invoice')]"))
+            EC.presence_of_element_located((By.XPATH,
+                "//a[contains(@href, '/invoice/')] | "
+                "//a[contains(@href, 'message')] | "
+                "//a[contains(@href, 'reservation')]"
+            ))
         )
         return True
     except Exception as e:
