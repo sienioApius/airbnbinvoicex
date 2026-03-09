@@ -275,112 +275,128 @@ def load_session_cookies(driver, cookie_file_path):
         logging.info(f"Failed to load cookies: {e}")
         return False
 
+def find_reservation_row(driver, booking_number, max_pages=20):
+    """Find the reservation row for a booking number, paginating if needed.
+    Returns the row element or None."""
+    for page_num in range(max_pages):
+        try:
+            # Look for the booking number text in the table
+            rows = driver.find_elements(By.XPATH, f"//tr[.//td[contains(text(), '{booking_number}')]]")
+            if not rows:
+                # Also try spans/divs inside cells
+                rows = driver.find_elements(By.XPATH, f"//tr[.//*[contains(text(), '{booking_number}')]]")
+            if rows:
+                logging.info(f"Found reservation {booking_number} on page {page_num + 1}")
+                return rows[0]
+
+            # Try next page
+            next_buttons = driver.find_elements(By.XPATH, "//button[@aria-label='Dalej' or @aria-label='Next']")
+            if not next_buttons or not next_buttons[0].is_enabled():
+                logging.warning(f"Booking {booking_number} not found after {page_num + 1} pages")
+                return None
+            next_buttons[0].click()
+            time.sleep(1)
+            WebDriverWait(driver, 10).until(
+                lambda d: d.execute_script('return document.readyState') == 'complete'
+            )
+        except Exception as e:
+            logging.warning(f"Error during pagination for {booking_number}: {e}")
+            return None
+    return None
+
+
+def open_more_options_menu(driver, row):
+    """Click the 'More options' button in a reservation row. Returns True if menu opened."""
+    try:
+        # Find the three-dots button in this row (works for both PL and EN)
+        more_btn = row.find_element(
+            By.XPATH, ".//button[@aria-label='Więcej opcji' or @aria-label='More options']"
+        )
+        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", more_btn)
+        time.sleep(0.2)
+        more_btn.click()
+        time.sleep(0.5)
+        return True
+    except Exception as e:
+        logging.warning(f"Could not open more options menu: {e}")
+        return False
+
+
+def close_popup(driver):
+    """Close any open popup by pressing Escape."""
+    try:
+        ActionChains(driver).send_keys('\ue00c').perform()  # Escape key
+        time.sleep(0.3)
+    except Exception:
+        pass
+
+
 def download_invoice(driver, booking_number, download_dir):
     downloaded_file_paths = []
     logging.info(f"Starting download for booking number {booking_number}")
 
     try:
-        booking_url = f"https://www.airbnb.com/hosting/reservations/all?confirmationCode={booking_number}"
-        logging.info(f"Navigating to: {booking_url}")
-        driver.get(booking_url)
+        # Step 1: Find the reservation row (with pagination)
+        row = find_reservation_row(driver, booking_number)
+        if not row:
+            logging.warning(f"Reservation {booking_number} not found in the list")
+            # Navigate back to first page for next booking
+            driver.get("https://www.airbnb.com/hosting/reservations/all")
+            WebDriverWait(driver, 10).until(
+                lambda d: d.execute_script('return document.readyState') == 'complete'
+            )
+            return False, downloaded_file_paths
 
-        # Wait for page load
-        WebDriverWait(driver, 20).until(lambda d: d.execute_script('return document.readyState') == 'complete')
-        
-        current_url = driver.current_url
-        
-        # First, check if invoice links are already visible on current page
-        quick_check_links = []
+        # Step 2: Click "More options" (three dots) on that row
+        if not open_more_options_menu(driver, row):
+            return False, downloaded_file_paths
+
+        # Step 3: Extract invoice links from the popup
         try:
-            quick_check_links = driver.find_elements(By.XPATH, "//a[contains(@href, '/vat_invoices/') or contains(@href, '/invoice/')]")
-            if quick_check_links:
-                logging.info(f"Invoice links already visible ({len(quick_check_links)} found), skipping navigation")
+            WebDriverWait(driver, 5).until(
+                EC.presence_of_element_located((By.XPATH, "//a[contains(@href, '/invoice/')]"))
+            )
         except Exception:
-            pass
-        
-        # Try to navigate to reservation details only if links not found and we're on a list page
-        if not quick_check_links and ('/reservations/all' in current_url or 'confirmationCode' in current_url):
-            # Find reservation link and navigate directly
-            try:
-                reservation_link = driver.find_element(By.XPATH, f"//a[contains(@href, '{booking_number}')]")
-                href = reservation_link.get_attribute('href')
-                if href and '/reservations/details/' in href:
-                    driver.get(href)
-                    # Wait for page load with shorter timeout
-                    WebDriverWait(driver, 10).until(
-                        lambda d: d.execute_script('return document.readyState') == 'complete'
-                    )
-                    current_url = driver.current_url
-                else:
-                    logging.warning("Could not find valid reservation details URL")
-            except Exception as e:
-                logging.warning(f"Error navigating to reservation details: {e}")
+            logging.warning(f"No invoice links appeared in popup for {booking_number}")
+            close_popup(driver)
+            return True, downloaded_file_paths  # Not an error - reservation may not have invoices
 
-        # Quick scroll to trigger lazy loading (only if we navigated)
-        if not quick_check_links:
-            try:
-                driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-                time.sleep(0.3)
-                driver.execute_script("window.scrollTo(0, 0);")
-            except Exception:
-                pass
-
-        # Use quick_check_links if we found them earlier, otherwise search
-        if quick_check_links:
-            download_links = quick_check_links
-            logging.info(f"Using {len(download_links)} invoice link(s) found earlier")
-        else:
-            # Try selectors in order of likelihood
-            invoice_selectors = [
-                "//a[contains(@href, '/vat_invoices/')]",
-                "//a[contains(@href, '/invoice/')]",
-            ]
-            
-            download_links = []
-            for selector in invoice_selectors:
-                try:
-                    links = driver.find_elements(By.XPATH, selector)
-                    if links:
-                        download_links = links
-                        logging.info(f"Found {len(download_links)} invoice link(s)")
-                        break
-                except Exception:
-                    continue
-        
-        if not download_links:
+        invoice_links = driver.find_elements(By.XPATH, "//a[contains(@href, '/invoice/')]")
+        if not invoice_links:
             logging.warning(f"No invoice links found for booking number {booking_number}")
+            close_popup(driver)
             return True, downloaded_file_paths
 
-        for link_index in range(len(download_links)):
-            try:
-                link_el = download_links[link_index]
-                
-                # Wait for link to be clickable
-                WebDriverWait(driver, 20).until(EC.element_to_be_clickable(link_el))
-                
-                # Click invoice link
-                try:
-                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", link_el)
-                    time.sleep(0.1)
-                except Exception:
-                    pass
-                
-                driver.execute_script("arguments[0].click();", link_el)
+        # Collect hrefs before closing popup (elements go stale after navigation)
+        invoice_hrefs = []
+        for link in invoice_links:
+            href = link.get_attribute('href')
+            if href:
+                invoice_hrefs.append(href)
+        logging.info(f"Found {len(invoice_hrefs)} invoice link(s) for {booking_number}")
 
-                # Wait for new tab (shorter timeout)
+        # Close the popup before navigating
+        close_popup(driver)
+
+        # Step 4: Open each invoice link and print to PDF
+        for link_index, href in enumerate(invoice_hrefs):
+            try:
+                # Open invoice in new tab
+                driver.execute_script("window.open(arguments[0], '_blank');", href)
                 WebDriverWait(driver, 5).until(lambda d: len(d.window_handles) > 1)
                 driver.switch_to.window(driver.window_handles[-1])
 
-                # Wait for page load (shorter timeout)
-                WebDriverWait(driver, 5).until(lambda d: d.execute_script('return document.readyState') == 'complete')
-                
-                # Wait for content to be rendered (content loads asynchronously after readyState)
-                # Check that body has substantial content (not just loading skeleton)
+                # Wait for page load
+                WebDriverWait(driver, 10).until(
+                    lambda d: d.execute_script('return document.readyState') == 'complete'
+                )
+
+                # Wait for content to be rendered
                 WebDriverWait(driver, 10).until(
                     lambda d: len(d.find_element(By.TAG_NAME, "body").text) > 100 if d.find_elements(By.TAG_NAME, "body") else False
                 )
 
-                # Optimized print options for faster PDF generation
+                # Print to PDF
                 print_options = {
                     "printBackground": False,
                     "pageRanges": "1",
@@ -394,28 +410,22 @@ def download_invoice(driver, booking_number, download_dir):
                     "displayHeaderFooter": False,
                     "scale": 0.8
                 }
-
-                # Execute the print command
                 pdf = driver.execute_cdp_cmd("Page.printToPDF", print_options)
-
-                # Decode the result
                 pdf_content = base64.b64decode(pdf['data'])
 
-                # Save the PDF to a file
                 file_path = os.path.join(download_dir, f"invoice_{booking_number}_{link_index+1}.pdf")
                 with open(file_path, 'wb') as file:
                     file.write(pdf_content)
                 downloaded_file_paths.append(file_path)
                 logging.info(f"Saved invoice PDF: {file_path}")
 
-                # Close the new tab and switch back
+                # Close tab and switch back
                 driver.close()
                 driver.switch_to.window(driver.window_handles[0])
-                time.sleep(0.5)  # Minimal delay between downloads
-                
+                time.sleep(0.5)
+
             except Exception as link_error:
                 logging.error(f"Error processing invoice link {link_index + 1}: {link_error}")
-                # Try to close any extra tabs and continue
                 try:
                     while len(driver.window_handles) > 1:
                         driver.switch_to.window(driver.window_handles[-1])
@@ -427,13 +437,12 @@ def download_invoice(driver, booking_number, download_dir):
 
         logging.info(f"Successfully downloaded {len(downloaded_file_paths)} invoice(s) for booking {booking_number}")
         return True, downloaded_file_paths
-    
+
     except Exception as e:
-        # Enhanced error handling with more diagnostics
         timestamp = int(time.time())
         screenshot_path = None
         html_path = None
-        
+
         try:
             screenshot_path = os.path.join(download_dir, f"error_{booking_number}_{timestamp}.png")
             driver.save_screenshot(screenshot_path)
@@ -441,9 +450,8 @@ def download_invoice(driver, booking_number, download_dir):
         except Exception as screenshot_error:
             screenshot_path = "<screenshot failed>"
             logging.warning(f"Could not save screenshot: {screenshot_error}")
-        
+
         try:
-            # Save HTML for debugging
             html_path = os.path.join(download_dir, f"error_{booking_number}_{timestamp}.html")
             with open(html_path, 'w', encoding='utf-8') as f:
                 f.write(driver.page_source)
@@ -451,10 +459,10 @@ def download_invoice(driver, booking_number, download_dir):
         except Exception as html_error:
             html_path = "<html save failed>"
             logging.warning(f"Could not save HTML: {html_error}")
-        
+
         current_url = getattr(driver, 'current_url', 'n/a')
         page_title = getattr(driver, 'title', 'n/a')
-        
+
         logging.exception(
             f"Error downloading invoice for booking number {booking_number}: {repr(e)} | "
             f"url={current_url} | title={page_title} | "
@@ -581,6 +589,11 @@ def scrape_airbnb_invoices(booking_numbers, manual_mfa=False, client_id=None):
             retry_count = 0
             while not success and retry_count < 5:
                 logging.info(f"Retrying download for booking {booking_number} (Attempt {retry_count + 1})")
+                # Navigate back to reservations list before retry
+                driver_headless.get("https://www.airbnb.com/hosting/reservations/all")
+                WebDriverWait(driver_headless, 10).until(
+                    lambda d: d.execute_script('return document.readyState') == 'complete'
+                )
                 success, file_paths = download_invoice(driver_headless, booking_number, download_dir)
                 retry_count += 1
 
@@ -590,6 +603,11 @@ def scrape_airbnb_invoices(booking_numbers, manual_mfa=False, client_id=None):
             else:
                 all_downloaded_files.extend(file_paths)
 
+            # Navigate back to reservations list for next booking
+            driver_headless.get("https://www.airbnb.com/hosting/reservations/all")
+            WebDriverWait(driver_headless, 10).until(
+                lambda d: d.execute_script('return document.readyState') == 'complete'
+            )
             time.sleep(1)  # Reduced delay between bookings (still respectful to Airbnb)
 
             # Update progress after processing each booking

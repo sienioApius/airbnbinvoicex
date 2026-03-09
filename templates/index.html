@@ -42,17 +42,14 @@
     </style>
     <script>
         function formatInput(input) {
-            return input.replace(/\s+/g, '\n').trim();
+            return input.split(/[\s,]+/).filter(function(s) { return s.length > 0; }).join('\n');
         }
 
         function prepareData() {
             var textArea = document.getElementById('booking_numbers');
-            var bookingNumbers = textArea.value.split(/\s+/);
-            var formattedInput = bookingNumbers.join(',');
-            if (!formattedInput.endsWith(',')) {
-                formattedInput += ',';
-            }
-            textArea.value = formattedInput;
+            // Split on commas, whitespace, or any mix — then filter out empties
+            var bookingNumbers = textArea.value.split(/[\s,]+/).filter(function(s) { return s.length > 0; });
+            textArea.value = bookingNumbers.join(',');
         }
         window.onload = function() {
             var textArea = document.getElementById('booking_numbers');
