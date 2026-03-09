@@ -29,6 +29,15 @@ def get_user_data_dir():
     os.makedirs(path, exist_ok=True)
     return path
 
+def check_chrome_installed():
+    """Return path to Chrome binary, or None if not found."""
+    return shutil.which("google-chrome") or shutil.which("chromium") or shutil.which("chromium-browser") or \
+        next((p for p in [
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        ] if os.path.isfile(p)), None)
+
 import logging
 from selenium.webdriver.remote.remote_connection import LOGGER as selenium_logger
 
@@ -756,6 +765,13 @@ def complete():
 def not_found(error):
     return render_template('404.html'), 404
 
+
+if not check_chrome_installed():
+    print("\n" + "="*60)
+    print("ERROR: Google Chrome not found.")
+    print("Please install Chrome from https://www.google.com/chrome/")
+    print("="*60 + "\n")
+    sys.exit(1)
 
 # Register shutdown handlers when the module is imported
 register_shutdown_handlers()
