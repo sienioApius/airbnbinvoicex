@@ -5,11 +5,8 @@ __pycache__/
 *.pyc
 venv/
 airbnb_env/
-.env
-__pycache__/
-venv/
 instance/
-*.pyc
+.env
 .DS_Store
 
 # Snyk Security Extension - AI Rules (auto-generated)

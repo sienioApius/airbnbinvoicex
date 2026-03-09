@@ -189,44 +189,14 @@ def cleanup_files(file_paths, download_dir):
 
 
 
-def login_to_airbnb(driver, manual_mfa=False):
+def login_to_airbnb(driver):
     try:
         logging.info("Logging into Airbnb...")
 
         driver.get("https://www.airbnb.com/login")
 
-        if manual_mfa:
-            # Let the user complete the entire login (including MFA) manually in the visible browser.
-            # Wait until we're no longer on the login page (up to 5 minutes).
-            WebDriverWait(driver, 300).until(lambda d: 'login' not in d.current_url)
-        else:
-            # Automated (non-MFA) fallback
-            continue_with_email_button = WebDriverWait(driver, 10).until(
-                EC.element_to_be_clickable((By.XPATH, "//button[@aria-label='Continue with email']"))
-            )
-            continue_with_email_button.click()
-
-            email_field = WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.NAME, "user[email]"))
-            )
-            # Credentials removed. This path is not used in enforced MFA mode.
-
-            continue_button = WebDriverWait(driver, 10).until(
-                EC.element_to_be_clickable((By.XPATH, "//button[@data-testid='signup-login-submit-btn']"))
-            )
-            continue_button.click()
-
-            password_field = WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.NAME, "user[password]"))
-            )
-            # Credentials removed. This path is not used in enforced MFA mode.
-
-            login_button = WebDriverWait(driver, 10).until(
-                EC.element_to_be_clickable((By.XPATH, "//button[@data-testid='signup-login-submit-btn']"))
-            )
-            login_button.click()
-
-            time.sleep(5)
+        # Wait until we're no longer on the login page (up to 5 minutes).
+        WebDriverWait(driver, 300).until(lambda d: 'login' not in d.current_url)
     except Exception as e:
         logging.exception(f"Error during login: {repr(e)} | url={getattr(driver, 'current_url', 'n/a')}")
         # Handle the error or rethrow to be caught by calling function
@@ -490,6 +460,8 @@ def scrape_airbnb_invoices(booking_numbers, manual_mfa=False, client_id=None):
 
     total_bookings = len(booking_numbers)
     failed_downloads = []
+    all_downloaded_files = []
+    zip_path = None
 
     driver_visible = None
     driver_headless = None
@@ -533,7 +505,7 @@ def scrape_airbnb_invoices(booking_numbers, manual_mfa=False, client_id=None):
                         PROGRESS[client_id]['stage_progress'] = 15
             
             driver_visible = initialize_driver(download_dir, headless=False)
-            login_to_airbnb(driver_visible, manual_mfa=True)
+            login_to_airbnb(driver_visible)
             save_session_cookies(driver_visible, cookie_file_path)
             
             # Transfer cookies to new headless browser
@@ -775,7 +747,10 @@ def complete_check():
 
 @app.route('/download_zip/<filename>')
 def download_zip(filename):
-    full_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'invoice_downloads', filename)
+    safe_base = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'invoice_downloads')
+    full_path = os.path.realpath(os.path.join(safe_base, filename))
+    if not full_path.startswith(safe_base + os.sep):
+        abort(400)
     if not os.path.isfile(full_path):
         abort(404)
     return send_file(full_path, as_attachment=True)

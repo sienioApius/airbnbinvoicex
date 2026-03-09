@@ -41,10 +41,6 @@
         
     </style>
     <script>
-        function formatInput(input) {
-            return input.split(/[\s,]+/).filter(function(s) { return s.length > 0; }).join('\n');
-        }
-
         function prepareData() {
             var textArea = document.getElementById('booking_numbers');
             // Split on commas, whitespace, or any mix — then filter out empties
@@ -74,54 +70,10 @@
             if (hint) { hint.style.display = 'block'; }
         }
 
-        async function pollProgress() {
-            try {
-                const res = await fetch('/progress');
-                const data = await res.json();
-                const bar = document.getElementById('progress-bar');
-                const label = document.getElementById('progress-label');
-                if (!data || !bar) return;
-                
-                const total = data.total || 0;
-                const current = data.current || 0;
-                const done = !!data.done;
-                const status = data.status || 'unknown';
-                const pct = total > 0 ? Math.floor((current / total) * 100) : 0;
-                
-                bar.style.width = pct + '%';
-                bar.setAttribute('aria-valuenow', pct);
-                
-                if (status === 'no_session') {
-                    label.textContent = 'Session not found…';
-                } else if (status === 'not_started') {
-                    label.textContent = 'Waiting to start…';
-                } else if (total === 0) {
-                    label.textContent = 'Initializing…';
-                } else if (done) {
-                    label.textContent = 'Finalizing…';
-                } else {
-                    label.textContent = `Downloading ${current} of ${total}…`;
-                }
-                
-                console.log('Progress:', data); // Debug log
-                
-                if (!done) {
-                    setTimeout(pollProgress, 1000);
-                }
-            } catch (e) {
-                console.log('Progress poll error:', e);
-                setTimeout(pollProgress, 2000);
-            }
-        }
-
         function onSubmitHandler(event) {
-            // Prevent immediate navigation so the browser can repaint the progress state
             event.preventDefault();
             toggleVisibility();
-            // Allow one frame for layout/paint, then submit
             setTimeout(function() { event.target.submit(); }, 50);
-            // Start polling after a longer delay to let server initialize
-            setTimeout(pollProgress, 2000);
             return false;
         }
     </script>
@@ -130,11 +82,6 @@
     <div id="form-container">
         <h1 class="airbnb-style text-center">Airbnb Invoice Downloader</h1>
         <form id="download-form" method="POST" onsubmit="return onSubmitHandler(event);" class="mt-4">
-            
-            <!-- Credentials are no longer collected; login is manual via browser with MFA. -->
-    
-            <!-- MFA is now enforced; browser will open for manual completion. -->
-
             <div class="form-group">
                 <label for="booking_numbers">Enter Booking Numbers:</label>
                 <textarea id="booking_numbers" name="booking_numbers" class="form-control" rows="4"></textarea>
