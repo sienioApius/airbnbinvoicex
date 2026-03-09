@@ -13,6 +13,16 @@ Flask web app that automates downloading Airbnb invoices. Enter booking confirma
 - Python 3.x
 - Chrome or Chromium browser (ChromeDriver is managed automatically by Selenium)
 
+## Download (recommended)
+
+1. Go to [Releases](https://github.com/sienioApius/airbnbinvoicex/releases/latest)
+2. Download `AirbnbInvoiceX-mac.zip` (Mac) or `AirbnbInvoiceX-win.zip` (Windows)
+3. Unzip and double-click `AirbnbInvoiceX`
+4. **Mac only:** First time — right-click → Open → Open (bypasses Gatekeeper)
+5. Browser opens automatically at `http://localhost:5001`
+
+**Requirement:** Google Chrome must be installed.
+
 ## Quickstart
 
 ```bash
