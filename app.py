@@ -761,6 +761,16 @@ def complete():
 
 
 
+@app.route('/quit', methods=['POST'])
+def quit_app():
+    def shutdown():
+        time.sleep(0.5)
+        cleanup_all_resources()
+        os.kill(os.getpid(), signal.SIGTERM)
+    Thread(target=shutdown, daemon=True).start()
+    return ('', 204)
+
+
 @app.errorhandler(404)
 def not_found(error):
     return render_template('404.html'), 404

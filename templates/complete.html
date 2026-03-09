@@ -15,6 +15,11 @@
     </style>
 </head>
 <body>
+    <div style="position:fixed;top:12px;right:16px;">
+        <form method="POST" action="/quit" onsubmit="return confirm('Quit AirbnbInvoiceX?');">
+            <button type="submit" class="btn btn-sm btn-outline-secondary">Quit App</button>
+        </form>
+    </div>
     <h1 class="airbnb-style text-center">Airbnb Invoice Downloader</h1>
     <h1>Download Complete!</h1>
     <p>Total Bookings: {{ report.total_bookings }}</p>
