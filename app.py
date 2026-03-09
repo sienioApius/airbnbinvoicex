@@ -245,34 +245,27 @@ def load_session_cookies(driver, cookie_file_path):
         logging.info(f"Failed to load cookies: {e}")
         return False
 
-def find_reservation_row(driver, booking_number, max_pages=20):
-    """Find the reservation row for a booking number, paginating if needed.
-    Returns the row element or None."""
-    for page_num in range(max_pages):
-        try:
-            # Look for the booking number text in the table
-            rows = driver.find_elements(By.XPATH, f"//tr[.//td[contains(text(), '{booking_number}')]]")
-            if not rows:
-                # Also try spans/divs inside cells
-                rows = driver.find_elements(By.XPATH, f"//tr[.//*[contains(text(), '{booking_number}')]]")
-            if rows:
-                logging.info(f"Found reservation {booking_number} on page {page_num + 1}")
-                return rows[0]
-
-            # Try next page
-            next_buttons = driver.find_elements(By.XPATH, "//button[@aria-label='Dalej' or @aria-label='Next']")
-            if not next_buttons or not next_buttons[0].is_enabled():
-                logging.warning(f"Booking {booking_number} not found after {page_num + 1} pages")
-                return None
-            next_buttons[0].click()
-            time.sleep(1)
-            WebDriverWait(driver, 10).until(
-                lambda d: d.execute_script('return document.readyState') == 'complete'
-            )
-        except Exception as e:
-            logging.warning(f"Error during pagination for {booking_number}: {e}")
-            return None
-    return None
+def find_reservation_row(driver, booking_number):
+    """Navigate directly to the filtered reservations list and return the row element or None."""
+    try:
+        url = f"https://www.airbnb.com/hosting/reservations/all?confirmationCode={booking_number}"
+        driver.get(url)
+        WebDriverWait(driver, 15).until(
+            lambda d: d.execute_script('return document.readyState') == 'complete'
+        )
+        # Wait for table rows to appear
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.XPATH, "//tr[.//*[contains(text(), 'Więcej opcji') or contains(@aria-label, 'More options') or contains(@aria-label, 'Więcej opcji')]]"))
+        )
+        rows = driver.find_elements(By.XPATH, f"//tr[.//*[contains(text(), '{booking_number}')]]")
+        if rows:
+            logging.info(f"Found reservation {booking_number}")
+            return rows[0]
+        logging.warning(f"Booking {booking_number} not found in filtered view")
+        return None
+    except Exception as e:
+        logging.warning(f"Error finding reservation {booking_number}: {e}")
+        return None
 
 
 def open_more_options_menu(driver, row):
@@ -283,9 +276,11 @@ def open_more_options_menu(driver, row):
             By.XPATH, ".//button[@aria-label='Więcej opcji' or @aria-label='More options']"
         )
         driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", more_btn)
-        time.sleep(0.2)
         more_btn.click()
-        time.sleep(0.5)
+        # Wait for popup to actually appear
+        WebDriverWait(driver, 5).until(
+            EC.presence_of_element_located((By.XPATH, "//a[contains(@href, '/invoice/')] | //a[contains(text(), 'Faktura') or contains(text(), 'Invoice')]"))
+        )
         return True
     except Exception as e:
         logging.warning(f"Could not open more options menu: {e}")
@@ -296,7 +291,7 @@ def close_popup(driver):
     """Close any open popup by pressing Escape."""
     try:
         ActionChains(driver).send_keys('\ue00c').perform()  # Escape key
-        time.sleep(0.3)
+        time.sleep(0.1)
     except Exception:
         pass
 
@@ -310,11 +305,6 @@ def download_invoice(driver, booking_number, download_dir):
         row = find_reservation_row(driver, booking_number)
         if not row:
             logging.warning(f"Reservation {booking_number} not found in the list")
-            # Navigate back to first page for next booking
-            driver.get("https://www.airbnb.com/hosting/reservations/all")
-            WebDriverWait(driver, 10).until(
-                lambda d: d.execute_script('return document.readyState') == 'complete'
-            )
             return False, downloaded_file_paths
 
         # Step 2: Click "More options" (three dots) on that row
@@ -322,15 +312,6 @@ def download_invoice(driver, booking_number, download_dir):
             return False, downloaded_file_paths
 
         # Step 3: Extract invoice links from the popup
-        try:
-            WebDriverWait(driver, 5).until(
-                EC.presence_of_element_located((By.XPATH, "//a[contains(@href, '/invoice/')]"))
-            )
-        except Exception:
-            logging.warning(f"No invoice links appeared in popup for {booking_number}")
-            close_popup(driver)
-            return True, downloaded_file_paths  # Not an error - reservation may not have invoices
-
         invoice_links = driver.find_elements(By.XPATH, "//a[contains(@href, '/invoice/')]")
         if not invoice_links:
             logging.warning(f"No invoice links found for booking number {booking_number}")
@@ -392,7 +373,7 @@ def download_invoice(driver, booking_number, download_dir):
                 # Close tab and switch back
                 driver.close()
                 driver.switch_to.window(driver.window_handles[0])
-                time.sleep(0.5)
+                time.sleep(0.2)
 
             except Exception as link_error:
                 logging.error(f"Error processing invoice link {link_index + 1}: {link_error}")
@@ -545,7 +526,6 @@ def scrape_airbnb_invoices(booking_numbers, manual_mfa=False, client_id=None):
                     PROGRESS[client_id]['stage'] = 'downloading'
                     PROGRESS[client_id]['stage_progress'] = 20
 
-        driver_headless.get("https://www.airbnb.com/hosting/reservations/all")
         all_downloaded_files = []
 
         for index, booking_number in enumerate(booking_numbers, start=1):
@@ -561,11 +541,6 @@ def scrape_airbnb_invoices(booking_numbers, manual_mfa=False, client_id=None):
             retry_count = 0
             while not success and retry_count < 5:
                 logging.info(f"Retrying download for booking {booking_number} (Attempt {retry_count + 1})")
-                # Navigate back to reservations list before retry
-                driver_headless.get("https://www.airbnb.com/hosting/reservations/all")
-                WebDriverWait(driver_headless, 10).until(
-                    lambda d: d.execute_script('return document.readyState') == 'complete'
-                )
                 success, file_paths = download_invoice(driver_headless, booking_number, download_dir)
                 retry_count += 1
 
@@ -575,12 +550,7 @@ def scrape_airbnb_invoices(booking_numbers, manual_mfa=False, client_id=None):
             else:
                 all_downloaded_files.extend(file_paths)
 
-            # Navigate back to reservations list for next booking
-            driver_headless.get("https://www.airbnb.com/hosting/reservations/all")
-            WebDriverWait(driver_headless, 10).until(
-                lambda d: d.execute_script('return document.readyState') == 'complete'
-            )
-            time.sleep(1)  # Reduced delay between bookings (still respectful to Airbnb)
+            time.sleep(1)  # Delay between bookings (respectful to Airbnb)
 
             # Update progress after processing each booking
             if client_id:
