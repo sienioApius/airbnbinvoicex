@@ -253,11 +253,16 @@ def find_reservation_row(driver, booking_number):
         WebDriverWait(driver, 15).until(
             lambda d: d.execute_script('return document.readyState') == 'complete'
         )
-        # Wait for table rows to appear
+        # Since we filtered by confirmationCode, just grab the first row with a "More options" button
+        # No need to match booking number text — the URL filter already did that
         WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.XPATH, "//tr[.//*[contains(text(), 'Więcej opcji') or contains(@aria-label, 'More options') or contains(@aria-label, 'Więcej opcji')]]"))
+            EC.presence_of_element_located((By.XPATH,
+                "//tr[.//button[@aria-label='Więcej opcji' or @aria-label='More options']]"
+            ))
         )
-        rows = driver.find_elements(By.XPATH, f"//tr[.//*[contains(text(), '{booking_number}')]]")
+        rows = driver.find_elements(By.XPATH,
+            "//tr[.//button[@aria-label='Więcej opcji' or @aria-label='More options']]"
+        )
         if rows:
             logging.info(f"Found reservation {booking_number}")
             return rows[0]
