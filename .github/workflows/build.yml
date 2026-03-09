@@ -63,6 +63,19 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: windows-build
+      - name: Delete previous releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          CURRENT_TAG: ${{ github.ref_name }}
+        run: |
+          gh release list --repo "$REPO" --limit 100 --json tagName -q '.[].tagName' | \
+          while read tag; do
+            if [ "$tag" != "$CURRENT_TAG" ]; then
+              echo "Deleting release $tag"
+              gh release delete "$tag" --repo "$REPO" --yes --cleanup-tag || true
+            fi
+          done
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
