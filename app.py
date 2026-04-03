@@ -263,21 +263,34 @@ def load_session_cookies(driver, cookie_file_path):
 def find_reservation_row(driver, booking_number):
     """Navigate directly to the filtered reservations list and return the row element or None."""
     try:
+        # Capture existing rows before navigation so we can detect page refresh
+        old_rows = driver.find_elements(By.XPATH,
+            "//tr[.//button[@aria-label='Więcej opcji' or @aria-label='More options']]"
+        )
+
         url = f"https://www.airbnb.com/hosting/reservations/all?confirmationCode={booking_number}"
         driver.get(url)
+
+        # Wait for old rows to go stale (proves the DOM refreshed)
+        if old_rows:
+            try:
+                WebDriverWait(driver, 10).until(EC.staleness_of(old_rows[0]))
+            except Exception:
+                pass  # old element already gone or page navigated
+
         WebDriverWait(driver, 15).until(
             lambda d: d.execute_script('return document.readyState') == 'complete'
         )
-        # Since we filtered by confirmationCode, just grab the first row with a "More options" button
-        # No need to match booking number text — the URL filter already did that
+
+        # Wait for a row that actually contains our booking number
+        xpath = (
+            f"//tr[contains(., '{booking_number}') and "
+            f".//button[@aria-label='Więcej opcji' or @aria-label='More options']]"
+        )
         WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.XPATH,
-                "//tr[.//button[@aria-label='Więcej opcji' or @aria-label='More options']]"
-            ))
+            EC.presence_of_element_located((By.XPATH, xpath))
         )
-        rows = driver.find_elements(By.XPATH,
-            "//tr[.//button[@aria-label='Więcej opcji' or @aria-label='More options']]"
-        )
+        rows = driver.find_elements(By.XPATH, xpath)
         if rows:
             logging.info(f"Found reservation {booking_number}")
             return rows[0]
