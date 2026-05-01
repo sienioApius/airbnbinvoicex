@@ -260,6 +260,50 @@ def load_session_cookies(driver, cookie_file_path):
         logging.info(f"Failed to load cookies: {e}")
         return False
 
+def _dump_page_diagnostics(driver, booking_number, reason):
+    """Save URL, title, row count, screenshot and HTML of current page for debugging."""
+    try:
+        download_dir = os.path.join(get_user_data_dir(), 'invoice_downloads')
+        os.makedirs(download_dir, exist_ok=True)
+        timestamp = int(time.time())
+        current_url = getattr(driver, 'current_url', 'n/a')
+        page_title = getattr(driver, 'title', 'n/a')
+        try:
+            row_count = len(driver.find_elements(By.XPATH,
+                "//tr[.//button[@aria-label='Więcej opcji' or @aria-label='More options']]"
+            ))
+        except Exception:
+            row_count = -1
+        try:
+            empty_hits = driver.find_elements(By.XPATH,
+                "//*[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'no reservations') "
+                "or contains(., 'Brak rezerwacji') or contains(., 'No matching')]"
+            )
+            empty_text = empty_hits[0].text[:200] if empty_hits else None
+        except Exception:
+            empty_text = None
+        logging.warning(
+            f"find_reservation diagnostics for {booking_number} ({reason}): "
+            f"url={current_url} | title={page_title} | "
+            f"rows_with_more_options={row_count} | empty_state_text={empty_text!r}"
+        )
+        screenshot_path = os.path.join(download_dir, f"find_error_{booking_number}_{timestamp}.png")
+        html_path = os.path.join(download_dir, f"find_error_{booking_number}_{timestamp}.html")
+        try:
+            driver.save_screenshot(screenshot_path)
+            logging.info(f"Saved find-error screenshot: {screenshot_path}")
+        except Exception as e:
+            logging.warning(f"Could not save find-error screenshot: {e}")
+        try:
+            with open(html_path, 'w', encoding='utf-8') as f:
+                f.write(driver.page_source)
+            logging.info(f"Saved find-error HTML: {html_path}")
+        except Exception as e:
+            logging.warning(f"Could not save find-error HTML: {e}")
+    except Exception as e:
+        logging.warning(f"Diagnostics dump failed for {booking_number}: {e}")
+
+
 def find_reservation_row(driver, booking_number):
     """Navigate directly to the filtered reservations list and return the row element or None."""
     try:
@@ -287,17 +331,26 @@ def find_reservation_row(driver, booking_number):
             f"//tr[contains(., '{booking_number}') and "
             f".//button[@aria-label='Więcej opcji' or @aria-label='More options']]"
         )
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.XPATH, xpath))
-        )
+        try:
+            WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.XPATH, xpath))
+            )
+        except Exception as wait_err:
+            _dump_page_diagnostics(driver, booking_number, f"timeout waiting for row: {wait_err.__class__.__name__}")
+            return None
+
         rows = driver.find_elements(By.XPATH, xpath)
         if rows:
             logging.info(f"Found reservation {booking_number}")
             return rows[0]
-        logging.warning(f"Booking {booking_number} not found in filtered view")
+        _dump_page_diagnostics(driver, booking_number, "xpath returned 0 rows")
         return None
     except Exception as e:
         logging.warning(f"Error finding reservation {booking_number}: {e}")
+        try:
+            _dump_page_diagnostics(driver, booking_number, f"unexpected exception: {e.__class__.__name__}")
+        except Exception:
+            pass
         return None
 
 
